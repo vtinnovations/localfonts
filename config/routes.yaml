@@ -1,0 +1,3 @@
+localfonts_backend:
+  resource: ../src/Controller/Backend/
+  type: attribute

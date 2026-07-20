@@ -1,0 +1,47 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+    bind:
+      $projectDir: '%kernel.project_dir%'
+
+  VTinnovations\LocalFonts\:
+    resource: '../src/'
+    exclude:
+      - '../src/VtinnovationsLocalFontsBundle.php'
+      - '../src/DependencyInjection/'
+      - '../src/ContaoManager/'
+      - '../src/Config/Paths.php'   # scalar arg, defined below
+
+  # ── Licensing (paid-only, v-t.one) ────────────────────────────────────────
+  # Paths + LicenseManager are public so the BE_MOD callback can fetch them.
+  VTinnovations\LocalFonts\Config\Paths:
+    public: true
+    arguments:
+      $scratchDir: '%vtinnovations_local_fonts.scratch_dir%'
+
+  VTinnovations\LocalFonts\Security\LicenseManager:
+    public: true
+
+  VTinnovations\LocalFonts\Security\LicenseGuard:
+    public: true
+
+  # ── Runtime ───────────────────────────────────────────────────────────────
+  # Fonts belong in the Contao upload directory (files/), not in the web root —
+  # Contao symlinks the .public-marked folder into public/ itself.
+  VTinnovations\LocalFonts\Service\FontStorage:
+    arguments:
+      $uploadPath: '%contao.upload_path%'
+
+  VTinnovations\LocalFonts\Service\LocalFontsManager:
+    public: true
+
+  VTinnovations\LocalFonts\EventListener\FrontendAssetsListener:
+    public: true
+    tags:
+      - { name: contao.hook, hook: modifyFrontendPage, method: onModifyFrontendPage }
+
+  VTinnovations\LocalFonts\EventListener\FrontendResponseListener:
+    tags:
+      - { name: kernel.event_subscriber }
