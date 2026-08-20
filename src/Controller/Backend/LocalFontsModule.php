@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
-/**
- * @package   vtinnovations/localfonts
- * @author    V&T Innovations
- * @license   LGPL-3.0-or-later
- * @copyright V&T Innovations 2026
+/*
+ * Local Fonts
+ *
+ * Package: vtinnovations/localfonts
+ * Copyright: V&T Innovations
+ * Licence: LGPL-3.0-or-later
+ * Website: https://www.v-t.one
  */
 
 namespace VTinnovations\LocalFonts\Controller\Backend;
@@ -15,34 +17,32 @@ use Contao\BackendModule;
 use Contao\Environment;
 use Contao\Input;
 use Contao\System;
-use VTinnovations\LocalFonts\Security\LicenseManager;
+use VTinnovations\LocalFonts\Service\EntitlementEvaluator;
 use VTinnovations\LocalFonts\Service\LocalFontsManager;
 
 /**
  * Backend module under "Layout > Local Fonts". Walks the operator through the
  * three steps — scan, download, embed — and never writes files or touches the
- * front end without an explicit click.
+ * front end without an explicit click. Licensing itself is managed on the
+ * global "Settings" screen (see `contao/dca/tl_settings.php`); this module
+ * only reads the resulting entitlement state.
  */
 final class LocalFontsModule extends BackendModule
 {
     public function generate(): string
     {
+        System::loadLanguageFile('local_fonts');
+
         $formSubmit = (string) Input::post('FORM_SUBMIT');
         $action = (string) Input::post('localfonts_action');
-        $licenseManager = $this->getLicenseManager();
-        $licenseManager->refreshIfStale((string) Environment::get('host'));
+        $evaluation = $this->getEntitlementEvaluator()->evaluate();
 
         if (
             'POST' === ($_SERVER['REQUEST_METHOD'] ?? '')
             && 'tl_localfonts' === $formSubmit
             && '' !== $action
         ) {
-            if ('save_license' === $action) {
-                $licenseManager->activate((string) Input::post('license_key'), (string) Environment::get('host'));
-                $this->redirect($this->getRedirectUrl($action));
-            }
-
-            if (!$licenseManager->isLicensed()) {
+            if (!$evaluation->active) {
                 $this->redirect($this->getRedirectUrl('no_license'));
             }
 
@@ -53,16 +53,16 @@ final class LocalFontsModule extends BackendModule
         $manager = System::getContainer()->get(LocalFontsManager::class);
         [$tokenName, $token] = $this->getRequestToken();
 
-        return $this->renderMarkup($manager->getState(), $manager->getGeneratedCss(), $licenseManager, $tokenName, $token);
+        return $this->renderMarkup($manager->getState(), $manager->getGeneratedCss(), $evaluation->active, $tokenName, $token);
     }
 
     protected function compile(): void
     {
     }
 
-    private function getLicenseManager(): LicenseManager
+    private function getEntitlementEvaluator(): EntitlementEvaluator
     {
-        return System::getContainer()->get(LicenseManager::class);
+        return System::getContainer()->get(EntitlementEvaluator::class);
     }
 
     private function getRedirectUrl(string $action): string
@@ -99,9 +99,8 @@ final class LocalFontsModule extends BackendModule
     /**
      * @param array<string,mixed> $state
      */
-    private function renderMarkup(array $state, string $generatedCss, LicenseManager $licenseManager, string $tokenName, string $token): string
+    private function renderMarkup(array $state, string $generatedCss, bool $isLicensed, string $tokenName, string $token): string
     {
-        $isLicensed = $licenseManager->isLicensed();
         $detected = $state['detected'] ?? [];
         $installed = $state['fonts'] ?? [];
         $pages = $state['pages'] ?? [];
@@ -113,7 +112,7 @@ final class LocalFontsModule extends BackendModule
         $tokenField = '<input type="hidden" name="' . $this->esc($tokenName) . '" value="' . $this->esc($token) . '">';
 
         $html = '<div class="tl_listing_container localfonts-backend">';
-        $html .= $this->renderLicensePanel($licenseManager, $isLicensed, $tokenField);
+        $html .= $this->renderLicenseNotice($isLicensed);
 
         if (!$isLicensed) {
             return $html . '</div>';
@@ -127,38 +126,16 @@ final class LocalFontsModule extends BackendModule
         return $html . '</div>';
     }
 
-    private function renderLicensePanel(LicenseManager $licenseManager, bool $isLicensed, string $tokenField): string
+    private function renderLicenseNotice(bool $isLicensed): string
     {
-        $expiresAt = $licenseManager->getExpiresAt();
+        if ($isLicensed) {
+            return '';
+        }
 
-        $status = $isLicensed
-            ? '<span style="color:#5aa354;">aktiv</span>' . ($licenseManager->isBypassed() ? ' (Entwickler-Bypass)' : '')
-            : '<span style="color:#c33;">nicht aktiv</span>';
+        $lang = &$GLOBALS['TL_LANG']['local_fonts'];
+        $path = '<strong>' . $lang['module_settings_path'] . '</strong>';
 
-        $notice = $isLicensed
-            ? ''
-            : '<p class="tl_error" style="margin-top:12px;">Dieses Plugin benötigt eine gültige Lizenz von V&amp;T Innovations '
-                . '(<a href="https://www.v-t.one" target="_blank" rel="noopener">v-t.one</a>). '
-                . 'Ohne Lizenz werden weder Schriften geladen noch im Frontend eingebunden.</p>';
-
-        return '
-  <div style="margin:0 0 20px;padding:14px;border:1px solid #3a3f49;border-radius:4px;">
-    <form method="post">
-      <input type="hidden" name="FORM_SUBMIT" value="tl_localfonts">
-      ' . $tokenField . '
-      <input type="hidden" name="localfonts_action" value="save_license">
-      <label for="localfonts_license_key"><strong>Lizenzschlüssel (V&amp;T Innovations)</strong></label>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
-        <input id="localfonts_license_key" type="text" name="license_key" value="' . $this->esc($licenseManager->getLicenseKey()) . '" class="tl_text" style="min-width:320px;">
-        <button type="submit" class="tl_submit">Lizenz speichern</button>
-      </div>
-    </form>
-    <p style="margin-top:10px;"><strong>Status:</strong> ' . $status
-            . ' &nbsp;|&nbsp; <strong>Paket:</strong> ' . ($this->esc($licenseManager->getPackage()) ?: '-')
-            . ' &nbsp;|&nbsp; <strong>Domain:</strong> ' . ($this->esc($licenseManager->getDomain()) ?: '-')
-            . ' &nbsp;|&nbsp; <strong>Gültig bis:</strong> ' . (null !== $expiresAt && $expiresAt > 0 ? date('d.m.Y', $expiresAt) : 'unbegrenzt') . '</p>
-    ' . $notice . '
-  </div>';
+        return '<p class="tl_error" style="margin:0 0 18px;">' . \sprintf($lang['module_licence_required'], $path) . '</p>';
     }
 
     /**
@@ -186,31 +163,30 @@ final class LocalFontsModule extends BackendModule
      */
     private function renderStepScan(array $state, array $detected, array $pages, string $tokenField): string
     {
+        $lang = &$GLOBALS['TL_LANG']['local_fonts'];
         $lastScan = $state['lastScan'] ?? null;
         $rows = '';
 
         foreach ($detected as $font) {
-            $rows .= '<tr><td>' . $this->esc((string) ($font['family'] ?? 'Unbekannt'))
+            $rows .= '<tr><td>' . $this->esc((string) ($font['family'] ?? $lang['font_family_unknown']))
                 . '</td><td>' . $this->esc(implode(', ', $font['variants'] ?? []))
                 . '</td><td>' . count($font['files'] ?? []) . '</td></tr>';
         }
 
         $table = '' !== $rows
-            ? '<table class="tl_listing" style="margin-top:12px;"><thead><tr><th>Schrift</th><th>Schnitte</th><th>Dateien</th></tr></thead><tbody>' . $rows . '</tbody></table>'
+            ? '<table class="tl_listing" style="margin-top:12px;"><thead><tr><th>' . $lang['table_font'] . '</th><th>' . $lang['table_variants'] . '</th><th>' . $lang['table_files'] . '</th></tr></thead><tbody>' . $rows . '</tbody></table>'
             : '';
 
         $summary = null === $lastScan
-            ? '<p>Noch kein Scan ausgeführt.</p>'
-            : '<p><strong>Letzter Scan:</strong> ' . $this->esc((string) $lastScan)
-                . ' &nbsp;|&nbsp; <strong>Seiten:</strong> ' . count($pages)
-                . ' &nbsp;|&nbsp; <strong>Gefundene Schriften:</strong> ' . count($detected) . '</p>';
+            ? '<p>' . $lang['step1_none_yet'] . '</p>'
+            : '<p>' . \sprintf($lang['step1_summary'], $this->esc((string) $lastScan), count($pages), count($detected)) . '</p>';
 
         return $this->step(
             1,
-            'Website scannen',
-            'Durchsucht alle veröffentlichten Seiten nach Google Fonts. Es werden noch keine Dateien geschrieben.',
+            $lang['step1_title'],
+            $lang['step1_intro'],
             $summary . $table,
-            $this->button('scan', null === $lastScan ? 'Website scannen' : 'Erneut scannen', $tokenField)
+            $this->button('scan', null === $lastScan ? $lang['step1_button_first'] : $lang['step1_button_again'], $tokenField)
         );
     }
 
@@ -221,8 +197,10 @@ final class LocalFontsModule extends BackendModule
      */
     private function renderStepDownload(array $state, array $detected, array $installed, string $tokenField): string
     {
+        $lang = &$GLOBALS['TL_LANG']['local_fonts'];
+
         if ([] === $detected && [] === $installed) {
-            return $this->step(2, 'Schriften lokal laden', 'Lädt die gefundenen Schriftdateien herunter und erzeugt das lokale Stylesheet.', '<p>Zuerst Schritt 1 ausführen.</p>', '');
+            return $this->step(2, $lang['step2_title'], $lang['step2_intro'], '<p>' . $lang['step2_run_step1_first'] . '</p>', '');
         }
 
         $rows = '';
@@ -230,23 +208,23 @@ final class LocalFontsModule extends BackendModule
 
         foreach ($installed as $font) {
             $totalFiles += (int) ($font['files'] ?? 0);
-            $rows .= '<tr><td>' . $this->esc((string) ($font['family'] ?? 'Unbekannt'))
+            $rows .= '<tr><td>' . $this->esc((string) ($font['family'] ?? $lang['font_family_unknown']))
                 . '</td><td>' . $this->esc(implode(', ', $font['variants'] ?? []))
                 . '</td><td>' . $this->esc((string) ($font['files'] ?? 0)) . '</td></tr>';
         }
 
         if ([] === $installed) {
-            $body = '<p>Noch nichts heruntergeladen. ' . count($detected) . ' Schrift(en) stehen bereit.</p>';
-            $buttons = $this->button('download', 'Schriften jetzt lokal laden', $tokenField);
+            $body = '<p>' . \sprintf($lang['step2_none_downloaded'], count($detected)) . '</p>';
+            $buttons = $this->button('download', $lang['step2_button_download'], $tokenField);
         } else {
-            $body = '<p><strong>Lokal installiert:</strong> ' . count($installed) . ' Schrift(en), ' . $totalFiles . ' Datei(en)'
-                . (isset($state['lastDownload']) && null !== $state['lastDownload'] ? ' &nbsp;|&nbsp; <strong>Stand:</strong> ' . $this->esc((string) $state['lastDownload']) : '') . '</p>'
-                . '<table class="tl_listing" style="margin-top:12px;"><thead><tr><th>Schrift</th><th>Schnitte</th><th>Dateien</th></tr></thead><tbody>' . $rows . '</tbody></table>';
-            $buttons = $this->button('download', 'Erneut laden / aktualisieren', $tokenField)
-                . $this->button('remove', 'Lokale Schriften entfernen', $tokenField);
+            $body = '<p>' . \sprintf($lang['step2_installed_summary'], count($installed), $totalFiles)
+                . (isset($state['lastDownload']) && null !== $state['lastDownload'] ? \sprintf($lang['step2_as_of'], $this->esc((string) $state['lastDownload'])) : '') . '</p>'
+                . '<table class="tl_listing" style="margin-top:12px;"><thead><tr><th>' . $lang['table_font'] . '</th><th>' . $lang['table_variants'] . '</th><th>' . $lang['table_files'] . '</th></tr></thead><tbody>' . $rows . '</tbody></table>';
+            $buttons = $this->button('download', $lang['step2_button_redownload'], $tokenField)
+                . $this->button('remove', $lang['step2_button_remove'], $tokenField);
         }
 
-        return $this->step(2, 'Schriften lokal laden', 'Speichert die Schriftdateien in <code>files/localfonts/</code> und erzeugt das Stylesheet.', $body, $buttons);
+        return $this->step(2, $lang['step2_title'], $lang['step2_intro'], $body, $buttons);
     }
 
     /**
@@ -254,55 +232,54 @@ final class LocalFontsModule extends BackendModule
      */
     private function renderStepEmbed(array $installed, bool $isManual, bool $removeExternal, string $localCss, string $generatedCss, string $tokenField): string
     {
+        $lang = &$GLOBALS['TL_LANG']['local_fonts'];
+
         if ([] === $installed) {
-            return $this->step(3, 'Einbinden', 'Legt fest, wie das lokale Stylesheet in die Seite kommt.', '<p>Zuerst Schritt 2 ausführen.</p>', '');
+            return $this->step(3, $lang['step3_title'], $lang['step3_intro'], '<p>' . $lang['step3_run_step2_first'] . '</p>', '');
         }
 
-        $modeBox = '<p style="margin-bottom:10px;"><strong>Aktuell:</strong> '
-            . ($isManual
-                ? 'manuell — es wird <em>nichts</em> automatisch eingebunden.'
-                : 'automatisch — das Stylesheet wird in jede Seite eingebunden.')
-            . '</p>';
+        $modeBox = '<p style="margin-bottom:10px;">' . \sprintf($lang['step3_current_label'], $isManual ? $lang['step3_current_manual'] : $lang['step3_current_auto']) . '</p>';
 
         $modeButtons = $isManual
-            ? $this->button('set_mode_auto', 'Automatisch einbinden', $tokenField)
-            : $this->button('set_mode_manual', 'Selbst einbinden (CSS kopieren)', $tokenField);
+            ? $this->button('set_mode_auto', $lang['step3_button_set_auto'], $tokenField)
+            : $this->button('set_mode_manual', $lang['step3_button_set_manual'], $tokenField);
 
         $manualBox = '';
 
         if ($isManual) {
             $manualBox = '' !== $generatedCss
                 ? '
-      <p style="margin-top:14px;"><strong>CSS-Code zum Einpflegen</strong> — komplett kopieren, z.&nbsp;B. in das eigene Stylesheet oder im Layout unter „Zusätzliche &lt;head&gt;-Tags" in einen <code>&lt;style&gt;</code>-Block. Die Schriftdateien liegen bereits lokal unter <code>files/localfonts/</code>:</p>
+      <p style="margin-top:14px;">' . $lang['step3_css_heading'] . '</p>
       <textarea readonly class="tl_textarea" rows="18" style="width:100%;font-family:monospace;font-size:12px;white-space:pre;" onclick="this.select()">' . $this->esc($generatedCss) . '</textarea>
-      <p style="margin-top:6px;color:#999;">Wer lieber verlinkt statt kopiert, bindet stattdessen <code>' . $this->esc($localCss) . '</code> ein.</p>'
-                : '<p class="tl_error" style="margin-top:14px;">Das generierte Stylesheet wurde nicht gefunden. Bitte Schritt 2 erneut ausführen.</p>';
+      <p style="margin-top:6px;color:#999;">' . \sprintf($lang['step3_css_link_alt'], $this->esc($localCss)) . '</p>'
+                : '<p class="tl_error" style="margin-top:14px;">' . $lang['step3_css_missing'] . '</p>';
         }
 
         $blockWarning = $isManual && $removeExternal
-            ? '<p class="tl_error" style="margin-top:12px;">Achtung: Externe Google Fonts werden blockiert, das lokale Stylesheet aber nicht automatisch eingebunden. '
-                . 'Ohne den Code oben fehlen im Frontend die Schriften.</p>'
+            ? '<p class="tl_error" style="margin-top:12px;">' . $lang['step3_block_warning'] . '</p>'
             : '';
 
         $blockBox = '
-      <p style="margin-top:16px;"><strong>Externe Google Fonts blockieren:</strong> ' . ($removeExternal ? 'aktiv' : 'inaktiv') . '</p>
-      <p style="margin:4px 0 8px;">Entfernt verbleibende Verweise auf <code>fonts.googleapis.com</code> und <code>fonts.gstatic.com</code> aus dem Frontend.</p>'
+      <p style="margin-top:16px;">' . \sprintf($lang['step3_block_label'], $removeExternal ? $lang['step3_block_active'] : $lang['step3_block_inactive']) . '</p>
+      <p style="margin:4px 0 8px;">' . $lang['step3_block_description'] . '</p>'
             . $blockWarning;
 
         return $this->step(
             3,
-            'Einbinden',
-            'Legt fest, wie das lokale Stylesheet in die Seite kommt.',
+            $lang['step3_title'],
+            $lang['step3_intro'],
             $modeBox . $manualBox . $blockBox,
-            $modeButtons . $this->button('toggle_remove_external', $removeExternal ? 'Blockieren ausschalten' : 'Externe Google Fonts blockieren', $tokenField)
+            $modeButtons . $this->button('toggle_remove_external', $removeExternal ? $lang['step3_button_block_off'] : $lang['step3_button_block_on'], $tokenField)
         );
     }
 
     private function step(int $number, string $title, string $intro, string $body, string $buttons): string
     {
+        $lang = &$GLOBALS['TL_LANG']['local_fonts'];
+
         return '
   <div style="margin-bottom:18px;padding:14px;border:1px solid #3a3f49;border-radius:4px;">
-    <h2 style="margin:0 0 4px;">Schritt ' . $number . ': ' . $this->esc($title) . '</h2>
+    <h2 style="margin:0 0 4px;">' . \sprintf($lang['step_heading'], $number, $this->esc($title)) . '</h2>
     <p style="margin:0 0 10px;color:#999;">' . $intro . '</p>
     ' . $body . '
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">' . $buttons . '</div>

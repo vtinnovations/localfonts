@@ -2,6 +2,15 @@
 
 declare(strict_types=1);
 
+/*
+ * Local Fonts
+ *
+ * Package: vtinnovations/localfonts
+ * Copyright: V&T Innovations
+ * Licence: LGPL-3.0-or-later
+ * Website: https://www.v-t.one
+ */
+
 namespace VTinnovations\LocalFonts\Service;
 
 final class GoogleFontsParser

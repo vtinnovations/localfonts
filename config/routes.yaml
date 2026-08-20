@@ -1,3 +1,8 @@
 localfonts_backend:
   resource: ../src/Controller/Backend/
   type: attribute
+
+# Public, independent-of-backend-login server-to-server updater endpoint.
+localfonts_public:
+  resource: ../src/Controller/PackageSyncEndpoint.php
+  type: attribute

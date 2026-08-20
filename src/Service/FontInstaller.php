@@ -2,14 +2,18 @@
 
 declare(strict_types=1);
 
-/**
- * @package   vtinnovations/localfonts
- * @author    V&T Innovations
- * @license   LGPL-3.0-or-later
- * @copyright V&T Innovations 2026
+/*
+ * Local Fonts
+ *
+ * Package: vtinnovations/localfonts
+ * Copyright: V&T Innovations
+ * Licence: LGPL-3.0-or-later
+ * Website: https://www.v-t.one
  */
 
 namespace VTinnovations\LocalFonts\Service;
+
+use Contao\System;
 
 /**
  * Second step of the workflow: takes what {@see FontCrawler} detected and
@@ -28,12 +32,15 @@ final class FontInstaller
 
     public function install(): void
     {
+        System::loadLanguageFile('local_fonts');
+        $lang = &$GLOBALS['TL_LANG']['local_fonts'];
+
         $state = $this->stateStore->load();
         $detected = $state['detected'] ?? [];
         $messages = [];
 
         if ([] === $detected) {
-            $state['messages'] = ['Keine erkannten Fonts vorhanden. Bitte zuerst die Website scannen.'];
+            $state['messages'] = [$lang['installer_no_detected_fonts']];
             $this->stateStore->save($state);
 
             return;
@@ -49,7 +56,7 @@ final class FontInstaller
             $this->cssGenerator->generate($detected, (string) ($state['settings']['fontDisplay'] ?? 'swap'));
         } catch (\Throwable $exception) {
             $summary = [];
-            $messages[] = 'Fonts konnten nicht gespeichert werden: ' . $exception->getMessage();
+            $messages[] = sprintf($lang['installer_save_failed'], $exception->getMessage());
         }
 
         $state['fonts'] = array_values($summary);
@@ -76,6 +83,8 @@ final class FontInstaller
      */
     public function remove(): void
     {
+        System::loadLanguageFile('local_fonts');
+
         $dir = $this->storage->getPublicDir();
 
         if (is_dir($dir)) {
@@ -85,7 +94,7 @@ final class FontInstaller
         $state = $this->stateStore->load();
         $state['fonts'] = [];
         $state['lastDownload'] = null;
-        $state['messages'] = ['Lokale Schriften wurden entfernt.'];
+        $state['messages'] = [$GLOBALS['TL_LANG']['local_fonts']['installer_removed']];
 
         $this->stateStore->save($state);
     }

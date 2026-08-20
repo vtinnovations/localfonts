@@ -5,6 +5,7 @@ services:
     public: false
     bind:
       $projectDir: '%kernel.project_dir%'
+      $csrfTokenName: '%contao.csrf_token_name%'
 
   VTinnovations\LocalFonts\:
     resource: '../src/'
@@ -13,18 +14,36 @@ services:
       - '../src/DependencyInjection/'
       - '../src/ContaoManager/'
       - '../src/Config/Paths.php'   # scalar arg, defined below
+      - '../src/Config/ProductProfile.php'               # constants only
+      - '../src/Service/EntitlementRecord.php'           # value object, private constructor
+      - '../src/Service/EntitlementEvaluation.php'       # value object, private constructor
+      - '../src/Service/EntitlementVerificationResult.php' # value object, private constructor
+      - '../src/Service/UpdaterAuthResult.php'           # value object, private constructor
 
-  # ── Licensing (paid-only, v-t.one) ────────────────────────────────────────
-  # Paths + LicenseManager are public so the BE_MOD callback can fetch them.
+  # ── Entitlement (Lifetime Free, v-t.one) ────────────────────────────────
+  # Public so the tl_settings input_field_callback (System::importStatic) and
+  # the backend module callback (System::getContainer()) can fetch them.
   VTinnovations\LocalFonts\Config\Paths:
     public: true
     arguments:
       $scratchDir: '%vtinnovations_local_fonts.scratch_dir%'
 
-  VTinnovations\LocalFonts\Security\LicenseManager:
+  VTinnovations\LocalFonts\Config\TrustedSigningKeys: ~
+
+  # Plain invokable services (they don't extend Symfony's AbstractController,
+  # so they don't get this tag automatically): needed so the router can
+  # resolve them as controllers even though they stay private.
+  VTinnovations\LocalFonts\Controller\:
+    resource: '../src/Controller/'
+    tags: ['controller.service_arguments']
+
+  VTinnovations\LocalFonts\Service\EntitlementEvaluator:
     public: true
 
-  VTinnovations\LocalFonts\Security\LicenseGuard:
+  VTinnovations\LocalFonts\Service\ActivationService:
+    public: true
+
+  VTinnovations\LocalFonts\EventListener\DataContainer\SettingsLicencePanelListener:
     public: true
 
   # ── Runtime ───────────────────────────────────────────────────────────────

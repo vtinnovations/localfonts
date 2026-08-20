@@ -2,8 +2,18 @@
 
 declare(strict_types=1);
 
+/*
+ * Local Fonts
+ *
+ * Package: vtinnovations/localfonts
+ * Copyright: V&T Innovations
+ * Licence: LGPL-3.0-or-later
+ * Website: https://www.v-t.one
+ */
+
 namespace VTinnovations\LocalFonts\Service;
 
+use Contao\System;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 final class FontCrawler
@@ -27,6 +37,9 @@ final class FontCrawler
 
     public function scan(): void
     {
+        System::loadLanguageFile('local_fonts');
+        $lang = &$GLOBALS['TL_LANG']['local_fonts'];
+
         $state = $this->stateStore->load();
         $pages = $this->pageUrlProvider->getPublishedUrls();
         $stylesheetUrls = [];
@@ -34,7 +47,7 @@ final class FontCrawler
         $messages = [];
 
         if ([] === $pages) {
-            $messages[] = 'Keine veröffentlichten regulären Seiten gefunden.';
+            $messages[] = $lang['crawler_no_pages'];
         }
 
         // Without a request context (cron, contao-console) and without a DNS entry
@@ -44,8 +57,7 @@ final class FontCrawler
             $host = (string) (parse_url($pageUrl, PHP_URL_HOST) ?: '');
 
             if ('localhost' === $host || '127.0.0.1' === $host) {
-                $messages[] = 'Seiten-URLs wurden als "localhost" erzeugt. Scan im Backend ausführen '
-                    . 'oder die Domain am Startpunkt der Website (DNS) bzw. framework.router.request_context.host setzen.';
+                $messages[] = $lang['crawler_localhost_urls'];
 
                 break;
             }
@@ -90,16 +102,16 @@ final class FontCrawler
                             ];
                         }
                     } catch (\Throwable) {
-                        $messages[] = sprintf('Stylesheet konnte nicht gelesen werden: %s', $linkedStylesheetUrl);
+                        $messages[] = sprintf($lang['crawler_stylesheet_unreadable'], $linkedStylesheetUrl);
                     }
                 }
             } catch (\Throwable $exception) {
-                $messages[] = sprintf('Seite konnte nicht gelesen werden: %s', $pageUrl);
+                $messages[] = sprintf($lang['crawler_page_unreadable'], $pageUrl);
             }
         }
 
         if ([] === $stylesheetUrls && [] !== $pages) {
-            $messages[] = 'Keine Google-Fonts-Stylesheets auf den gescannten Seiten gefunden.';
+            $messages[] = $lang['crawler_no_stylesheets_found'];
         }
 
         $fonts = [];
@@ -123,12 +135,12 @@ final class FontCrawler
                     $fonts[$key]['files'] = array_merge($fonts[$key]['files'], $font['files']);
                 }
             } catch (\Throwable $exception) {
-                $messages[] = sprintf('Google-Fonts-CSS konnte nicht gelesen werden: %s', $stylesheetUrl);
+                $messages[] = sprintf($lang['crawler_google_fonts_css_unreadable'], $stylesheetUrl);
             }
         }
 
         if ([] === $fonts && [] !== $stylesheetUrls) {
-            $messages[] = 'Google-Fonts-Stylesheets wurden gefunden, aber keine ladbaren Font-Dateien erkannt.';
+            $messages[] = $lang['crawler_no_loadable_fonts'];
         }
 
         foreach ($fonts as $key => $font) {

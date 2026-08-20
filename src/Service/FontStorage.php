@@ -2,9 +2,19 @@
 
 declare(strict_types=1);
 
+/*
+ * Local Fonts
+ *
+ * Package: vtinnovations/localfonts
+ * Copyright: V&T Innovations
+ * Licence: LGPL-3.0-or-later
+ * Website: https://www.v-t.one
+ */
+
 namespace VTinnovations\LocalFonts\Service;
 
 use Contao\CoreBundle\Util\SymlinkUtil;
+use Contao\System;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 final class FontStorage
@@ -27,6 +37,9 @@ final class FontStorage
      */
     public function downloadFonts(array $fonts): array
     {
+        System::loadLanguageFile('local_fonts');
+        $lang = &$GLOBALS['TL_LANG']['local_fonts'];
+
         $summary = [];
         $this->failures = [];
 
@@ -34,7 +47,7 @@ final class FontStorage
             $fontDir = $this->getPublicDir() . '/' . $key;
 
             if (!is_dir($fontDir) && !@mkdir($fontDir, 0775, true) && !is_dir($fontDir)) {
-                $this->failures[] = sprintf('Verzeichnis konnte nicht angelegt werden: %s', $fontDir);
+                $this->failures[] = sprintf($lang['storage_dir_create_failed'], $fontDir);
 
                 continue;
             }
@@ -56,7 +69,7 @@ final class FontStorage
                         $response = $this->httpClient->request('GET', $file['url']);
                         @file_put_contents($target, $response->getContent());
                     } catch (\Throwable $exception) {
-                        $this->failures[] = sprintf('Download fehlgeschlagen (%s): %s', $file['url'], $exception->getMessage());
+                        $this->failures[] = sprintf($lang['storage_download_failed'], $file['url'], $exception->getMessage());
 
                         continue;
                     }
@@ -65,7 +78,7 @@ final class FontStorage
                 // Only count what is really on disk — a failed write must not be
                 // reported back to the backend as a downloaded font.
                 if (!is_file($target) || 0 === filesize($target)) {
-                    $this->failures[] = sprintf('Datei konnte nicht geschrieben werden: %s', $target);
+                    $this->failures[] = sprintf($lang['storage_file_write_failed'], $target);
 
                     continue;
                 }
@@ -118,6 +131,9 @@ final class FontStorage
      */
     public function makeWebAccessible(): void
     {
+        System::loadLanguageFile('local_fonts');
+        $lang = &$GLOBALS['TL_LANG']['local_fonts'];
+
         $dir = $this->getPublicDir();
 
         if (!is_dir($dir)) {
@@ -138,7 +154,7 @@ final class FontStorage
         }
 
         if (!is_dir(\dirname($link)) && !@mkdir(\dirname($link), 0775, true) && !is_dir(\dirname($link))) {
-            $this->failures[] = sprintf('Symlink-Verzeichnis konnte nicht angelegt werden: %s', \dirname($link));
+            $this->failures[] = sprintf($lang['storage_symlink_dir_failed'], \dirname($link));
 
             return;
         }
@@ -147,7 +163,7 @@ final class FontStorage
             SymlinkUtil::symlink($relative, $this->getWebDirName() . '/' . $relative, $this->projectDir);
         } catch (\Throwable $exception) {
             $this->failures[] = sprintf(
-                'Symlink %s konnte nicht angelegt werden (%s). "vendor/bin/contao-console contao:symlinks" ausführen.',
+                $lang['storage_symlink_failed'],
                 $link,
                 $exception->getMessage()
             );

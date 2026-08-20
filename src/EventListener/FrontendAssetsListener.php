@@ -2,11 +2,20 @@
 
 declare(strict_types=1);
 
+/*
+ * Local Fonts
+ *
+ * Package: vtinnovations/localfonts
+ * Copyright: V&T Innovations
+ * Licence: LGPL-3.0-or-later
+ * Website: https://www.v-t.one
+ */
+
 namespace VTinnovations\LocalFonts\EventListener;
 
 use Symfony\Component\HttpFoundation\RequestStack;
-use VTinnovations\LocalFonts\Security\LicenseGuard;
 use VTinnovations\LocalFonts\Service\CssImportCleaner;
+use VTinnovations\LocalFonts\Service\EntitlementEvaluator;
 use VTinnovations\LocalFonts\Service\FontCrawler;
 use VTinnovations\LocalFonts\Service\LocalFontsManager;
 use VTinnovations\LocalFonts\Service\StateStore;
@@ -16,7 +25,7 @@ final class FrontendAssetsListener
     public function __construct(
         private readonly StateStore $stateStore,
         private readonly CssImportCleaner $cssImportCleaner,
-        private readonly LicenseGuard $licenseGuard,
+        private readonly EntitlementEvaluator $entitlementEvaluator,
         private readonly RequestStack $requestStack,
         private readonly string $projectDir,
     ) {
@@ -24,8 +33,8 @@ final class FrontendAssetsListener
 
     public function onModifyFrontendPage(string $buffer, string $template = ''): string
     {
-        // Paid-only: without a valid license the page is left untouched.
-        if (!$this->licenseGuard->isLicensed()) {
+        // Without an active licence the page is left untouched — the framework default.
+        if (!$this->entitlementEvaluator->evaluate()->active) {
             return $buffer;
         }
 

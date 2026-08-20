@@ -6,13 +6,14 @@
     "license": "LGPL-3.0-or-later",
     "authors": [
         {
-            "name": "V&T Innovations Team",
-            "homepage": "https://www.v-t.one"
+            "name": "V&T Innovations",
+            "homepage": "https://v-t.one"
         }
     ],
     "require": {
         "php": "^8.2",
         "ext-json": "*",
+        "ext-sodium": "*",
         "contao/core-bundle": "^5.3",
         "symfony/config": "^6.4 || ^7.0",
         "symfony/console": "^6.4 || ^7.0",
@@ -22,7 +23,13 @@
         "symfony/http-kernel": "^6.4 || ^7.0"
     },
     "require-dev": {
-        "contao/manager-plugin": "^2.0"
+        "contao/manager-plugin": "^2.0",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "VTinnovations\\LocalFonts\\Tests\\": "tests/"
+        }
     },
     "conflict": {
         "contao/manager-plugin": "<2.0 || >=3.0"

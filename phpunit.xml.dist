@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    This bundle has no vendor directory of its own, it is a Contao library,
+    not an application. Run the suite from a project that has it installed
+    (e.g. the path repo symlinked Contao skeleton used for integration
+    testing), by invoking vendor/bin/phpunit from that project's root with a
+    bootstrap option pointing at its own vendor/autoload.php and a config
+    option pointing at this file.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"
+         colors="true"
+         failOnWarning="true"
+         failOnDeprecation="false"
+>
+    <testsuites>
+        <testsuite name="Local Fonts">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+</phpunit>

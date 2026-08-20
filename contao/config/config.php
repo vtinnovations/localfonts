@@ -1,10 +1,12 @@
 <?php
 
-/**
- * @package   vtinnovations/localfonts
- * @author    V&T Innovations
- * @license   LGPL-3.0-or-later
- * @copyright V&T Innovations 2026
+/*
+ * Local Fonts
+ *
+ * Package: vtinnovations/localfonts
+ * Copyright: V&T Innovations
+ * Licence: LGPL-3.0-or-later
+ * Website: https://www.v-t.one
  */
 
 use VTinnovations\LocalFonts\Controller\Backend\LocalFontsModule;
